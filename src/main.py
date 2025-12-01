@@ -24,7 +24,7 @@ def create_example_employee() -> Employee:
         name="Jean Dupont",
         email="jean.dupont@entreprise.com",
         department="RH",
-        permission_level=PermissionLevel.MANAGER
+        permission_level=PermissionLevel.EXECUTIVE
     )
 
 
