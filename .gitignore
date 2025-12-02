@@ -26,6 +26,8 @@ wheels/
 # Environnement
 .env
 .venv
+/venv
+/specialtopic
 
 # IDE
 .vscode/

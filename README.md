@@ -2,6 +2,16 @@
 
 Un chatbot intelligent pour les employés d'une entreprise qui utilise LangGraph pour l'orchestration, Elasticsearch pour la recherche de documents, et un système de gestion des permissions pour contrôler l'accès aux documents.
 
+## Use Case
+
+- L'utilisateur souhaite ajouter un document, il en spécifie le niveau d'accès
+- L'utilisateur demande une information dont le niveau d'accréditation est compatible avec son grade au chatbot 
+- L'utilisateur demande une information dont le niveau d'accréditation est incompatible avec son grade au chatbot 
+- L'utilisateur de niveau manager ou plus ajoute un utilisateur
+- Un utilisateur modifie un document dont-il à l'accès
+- Un utilisateur supprime un document dont-il à l'accès
+
+
 ## 🎯 Fonctionnalités
 
 - **Recherche RAG (Retrieval-Augmented Generation)**: Recherche sémantique dans les documents de l'entreprise
