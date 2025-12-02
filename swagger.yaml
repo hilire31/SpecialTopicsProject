@@ -1,0 +1,645 @@
+openapi: 3.0.3
+info:
+  title: Enterprise Chatbot API
+  description: |
+    API REST for the Enterprise Chatbot with LangGraph and Elasticsearch.
+    This API provides endpoints for document management, chatbot queries, and user management
+    with permission-based access control.
+  version: 1.0.0
+  contact:
+    name: API Support
+    email: support@company.com
+
+servers:
+  - url: http://localhost:8000
+    description: Local development server
+
+tags:
+  - name: Documents
+    description: Document management operations
+  - name: Chatbot
+    description: Chatbot query operations
+  - name: Users
+    description: User management operations
+
+paths:
+  /documents:
+    post:
+      tags:
+        - Documents
+      summary: Add a new document
+      description: |
+        Add a new document to the system with specified access level.
+        The document will be indexed in Elasticsearch with its permissions.
+      operationId: addDocument
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DocumentCreate'
+            example:
+              title: "Company Policy Document"
+              content: "This document contains important company policies..."
+              department: "HR"
+              document_type: "policy"
+              permission:
+                min_level: "manager"
+                allowed_departments: ["HR", "Management"]
+                allowed_users: null
+      responses:
+        '201':
+          description: Document created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    get:
+      tags:
+        - Documents
+      summary: List documents
+      description: Retrieve a list of documents accessible to the authenticated user
+      operationId: listDocuments
+      parameters:
+        - name: department
+          in: query
+          description: Filter by department
+          schema:
+            type: string
+        - name: document_type
+          in: query
+          description: Filter by document type
+          schema:
+            type: string
+        - name: limit
+          in: query
+          description: Maximum number of documents to return
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+        - name: offset
+          in: query
+          description: Number of documents to skip
+          schema:
+            type: integer
+            default: 0
+            minimum: 0
+      responses:
+        '200':
+          description: List of accessible documents
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  documents:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/DocumentResponse'
+                  total:
+                    type: integer
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /documents/{doc_id}:
+    get:
+      tags:
+        - Documents
+      summary: Get a document by ID
+      description: Retrieve a specific document if the user has access to it
+      operationId: getDocument
+      parameters:
+        - name: doc_id
+          in: path
+          required: true
+          description: Document ID
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Document retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    put:
+      tags:
+        - Documents
+      summary: Update a document
+      description: |
+        Update a document that the user has access to.
+        The user must have permission to modify the document.
+      operationId: updateDocument
+      parameters:
+        - name: doc_id
+          in: path
+          required: true
+          description: Document ID
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DocumentUpdate'
+            example:
+              title: "Updated Company Policy Document"
+              content: "This document has been updated with new information..."
+              department: "HR"
+              document_type: "policy"
+      responses:
+        '200':
+          description: Document updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    delete:
+      tags:
+        - Documents
+      summary: Delete a document
+      description: |
+        Delete a document that the user has access to.
+        The user must have permission to delete the document.
+      operationId: deleteDocument
+      parameters:
+        - name: doc_id
+          in: path
+          required: true
+          description: Document ID
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Document deleted successfully
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /chatbot/query:
+    post:
+      tags:
+        - Chatbot
+      summary: Query the chatbot
+      description: |
+        Ask a question to the chatbot. The chatbot will:
+        - Search for relevant documents based on the query
+        - Filter documents based on the user's permission level
+        - Generate a response using the accessible documents
+        
+        If the user asks for information with incompatible accreditation level,
+        they will receive an appropriate error message.
+      operationId: queryChatbot
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChatbotQuery'
+            examples:
+              compatible_access:
+                summary: Query with compatible access level
+                value:
+                  query: "What is the paid leave policy?"
+                  conversation_history: []
+              incompatible_access:
+                summary: Query requiring incompatible access level
+                value:
+                  query: "What is the company restructuring plan?"
+                  conversation_history: []
+      responses:
+        '200':
+          description: Chatbot response generated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatbotResponse'
+        '403':
+          description: User does not have permission to access the required documents
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Insufficient permissions"
+                message: "You do not have the required permission level to access documents related to this query."
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /users:
+    post:
+      tags:
+        - Users
+      summary: Add a new user
+      description: |
+        Add a new user to the system.
+        **Requires manager level or higher.**
+      operationId: addUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserCreate'
+            example:
+              name: "Jane Smith"
+              email: "jane.smith@company.com"
+              department: "IT"
+              permission_level: "employee"
+      responses:
+        '201':
+          description: User created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          description: User does not have manager level or higher
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Insufficient permissions"
+                message: "Manager level or higher is required to add users."
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    get:
+      tags:
+        - Users
+      summary: List users
+      description: Retrieve a list of users (requires manager level or higher)
+      operationId: listUsers
+      parameters:
+        - name: department
+          in: query
+          description: Filter by department
+          schema:
+            type: string
+        - name: permission_level
+          in: query
+          description: Filter by permission level
+          schema:
+            $ref: '#/components/schemas/PermissionLevel'
+      responses:
+        '200':
+          description: List of users
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  users:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/UserResponse'
+                  total:
+                    type: integer
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+components:
+  schemas:
+    PermissionLevel:
+      type: string
+      enum:
+        - employee
+        - manager
+        - director
+        - executive
+      description: Employee permission level hierarchy
+      example: "manager"
+
+    DocumentPermission:
+      type: object
+      required:
+        - min_level
+      properties:
+        min_level:
+          $ref: '#/components/schemas/PermissionLevel'
+        allowed_departments:
+          type: array
+          items:
+            type: string
+          nullable: true
+          description: List of departments with access. If null, accessible to all departments.
+          example: ["HR", "Management"]
+        allowed_users:
+          type: array
+          items:
+            type: string
+          nullable: true
+          description: List of specific users with access. If null, accessible to all authorized users.
+          example: ["emp_001", "emp_002"]
+
+    DocumentCreate:
+      type: object
+      required:
+        - title
+        - content
+        - permission
+      properties:
+        title:
+          type: string
+          description: Document title
+          example: "Company Policy Document"
+        content:
+          type: string
+          description: Document content
+          example: "This document contains important company policies..."
+        department:
+          type: string
+          nullable: true
+          description: Department associated with the document
+          example: "HR"
+        document_type:
+          type: string
+          nullable: true
+          description: Type of document (e.g., policy, manual, report)
+          example: "policy"
+        metadata:
+          type: object
+          additionalProperties: true
+          description: Additional metadata
+          example: {}
+        permission:
+          $ref: '#/components/schemas/DocumentPermission'
+
+    DocumentUpdate:
+      type: object
+      properties:
+        title:
+          type: string
+          description: Document title
+          example: "Updated Company Policy Document"
+        content:
+          type: string
+          description: Document content
+          example: "This document has been updated..."
+        department:
+          type: string
+          nullable: true
+          description: Department associated with the document
+          example: "HR"
+        document_type:
+          type: string
+          nullable: true
+          description: Type of document
+          example: "policy"
+        metadata:
+          type: object
+          additionalProperties: true
+          description: Additional metadata
+
+    DocumentResponse:
+      type: object
+      properties:
+        doc_id:
+          type: string
+          example: "doc_006"
+        title:
+          type: string
+          example: "Company Policy Document"
+        content:
+          type: string
+          example: "This document contains important company policies..."
+        department:
+          type: string
+          nullable: true
+          example: "HR"
+        document_type:
+          type: string
+          nullable: true
+          example: "policy"
+        metadata:
+          type: object
+          additionalProperties: true
+        permission:
+          $ref: '#/components/schemas/DocumentPermission'
+        created_at:
+          type: string
+          format: date-time
+          description: Document creation timestamp
+        updated_at:
+          type: string
+          format: date-time
+          description: Document last update timestamp
+
+    UserCreate:
+      type: object
+      required:
+        - name
+        - email
+        - department
+        - permission_level
+      properties:
+        name:
+          type: string
+          description: User full name
+          example: "Jane Smith"
+        email:
+          type: string
+          format: email
+          description: User email address
+          example: "jane.smith@company.com"
+        department:
+          type: string
+          description: User department
+          example: "IT"
+        permission_level:
+          $ref: '#/components/schemas/PermissionLevel'
+
+    UserResponse:
+      type: object
+      properties:
+        user_id:
+          type: string
+          example: "emp_007"
+        name:
+          type: string
+          example: "Jane Smith"
+        email:
+          type: string
+          format: email
+          example: "jane.smith@company.com"
+        department:
+          type: string
+          example: "IT"
+        permission_level:
+          $ref: '#/components/schemas/PermissionLevel'
+        created_at:
+          type: string
+          format: date-time
+          description: User creation timestamp
+
+    ChatbotQuery:
+      type: object
+      required:
+        - query
+      properties:
+        query:
+          type: string
+          description: User's question to the chatbot
+          example: "What is the paid leave policy?"
+        conversation_history:
+          type: array
+          items:
+            type: object
+            properties:
+              role:
+                type: string
+                enum: [user, assistant]
+              content:
+                type: string
+          description: Previous conversation messages for context
+          default: []
+
+    ChatbotResponse:
+      type: object
+      properties:
+        response:
+          type: string
+          description: Chatbot's generated response
+          example: "According to the company policy, all employees are entitled to 25 days of paid leave per year..."
+        retrieved_documents:
+          type: array
+          items:
+            type: object
+            properties:
+              doc_id:
+                type: string
+              title:
+                type: string
+              relevance_score:
+                type: number
+                format: float
+                description: Relevance score of the document to the query
+          description: List of documents used to generate the response
+        conversation_id:
+          type: string
+          description: Unique identifier for this conversation session
+          example: "conv_123456"
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Error type
+          example: "BadRequest"
+        message:
+          type: string
+          description: Error message
+          example: "Invalid request parameters"
+        details:
+          type: object
+          additionalProperties: true
+          description: Additional error details
+
+  responses:
+    BadRequest:
+      description: Bad request - Invalid parameters
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: "BadRequest"
+            message: "Invalid request parameters"
+
+    Unauthorized:
+      description: Unauthorized - Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: "Unauthorized"
+            message: "Authentication required"
+
+    Forbidden:
+      description: Forbidden - Insufficient permissions
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: "Forbidden"
+            message: "You do not have permission to perform this action"
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: "NotFound"
+            message: "The requested resource was not found"
+
+    InternalServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error: "InternalServerError"
+            message: "An internal server error occurred"
+
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token authentication
+
+security:
+  - BearerAuth: []
+
