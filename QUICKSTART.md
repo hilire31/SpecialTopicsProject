@@ -52,6 +52,13 @@ Indexation de 5 documents...
 python src/main.py
 ```
 
+### 6. Lancer le serveur MCP (optionnel)
+
+```bash
+# Run the MCP server to expose the protocol endpoints
+uvicorn mcp_server.server:app --reload --port 8080
+```
+
 ## 📝 Exemples d'utilisation
 
 ### Exemple basique

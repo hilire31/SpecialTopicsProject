@@ -35,6 +35,23 @@ pip install -r requirements.txt
 ```
 
 3. **Configurer les variables d'environnement**:
+
+## 🧭 Model Context Protocol (MCP) Server
+
+This project exposes a minimal MCP server that provides context and actions for models to use. It is located in `mcp_server/` and offers endpoints that match the MCP spec `mcp_server/mcp.yaml`.
+
+Run it locally with `uvicorn`:
+
+```bash
+uvicorn mcp_server.server:app --reload --port 8080
+```
+
+Useful endpoints:
+- `GET /mcp/spec` — returns the MCP spec
+- `POST /mcp/actions/retrieve_documents` — retrieve docs for a query and employee
+- `POST /mcp/actions/generate_response` — generate a response given documents and history
+- `POST /mcp/actions/chat` — composite action running retrieval and generation
+
 ```bash
 cp .env.example .env
 # Éditer .env et ajouter votre clé API OpenAI

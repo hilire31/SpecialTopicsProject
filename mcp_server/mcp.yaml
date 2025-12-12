@@ -1,0 +1,95 @@
+name: enterprise-chatbot-mcp
+version: 1.0.0
+description: Model Context Protocol for the Enterprise Chatbot. Exposes context providers and actions so models can query the system for employee-aware documents and generate responses.
+servers:
+  - url: http://localhost:8080
+    description: Local MCP server
+
+context_providers:
+  - id: employee_profile
+    description: Provides the employee profile used for permission filtering
+    type: object
+    schema:
+      type: object
+      properties:
+        user_id: {type: string}
+        name: {type: string}
+        email: {type: string}
+        department: {type: string}
+        permission_level: {type: string}
+
+  - id: conversation_history
+    description: Conversation messages to provide conversational context
+    type: array
+    items:
+      type: object
+      properties:
+        role: {type: string}
+        content: {type: string}
+
+  - id: documents
+    description: Documents retrieved by Elasticsearch, filtered by the employee's permissions
+    type: array
+    items:
+      type: object
+      properties:
+        doc_id: {type: string}
+        title: {type: string}
+        content: {type: string}
+        department: {type: string}
+        document_type: {type: string}
+        permission: {type: object}
+
+actions:
+  - id: retrieve_documents
+    description: Retrieve documents based on a query and employee context
+    inputs:
+      - name: query
+        type: string
+      - name: employee
+        type: object
+      - name: top_k
+        type: integer
+    outputs:
+      - name: documents
+        type: array
+  - id: generate_response
+    description: Generate a response from the LLM given documents and conversation history
+    inputs:
+      - name: query
+        type: string
+      - name: employee
+        type: object
+      - name: documents
+        type: array
+      - name: conversation_history
+        type: array
+    outputs:
+      - name: response
+        type: string
+  - id: chat
+    description: Composite: retrieve_documents then generate_response
+    inputs:
+      - name: query
+        type: string
+      - name: employee
+        type: object
+      - name: conversation_history
+        type: array
+    outputs:
+      - name: response
+        type: string
+
+endpoints:
+  - path: /mcp/spec
+    method: GET
+    description: Returns the MCP spec
+  - path: /mcp/actions/retrieve_documents
+    method: POST
+    description: Execute the retrieve_documents action
+  - path: /mcp/actions/generate_response
+    method: POST
+    description: Execute the generate_response action
+  - path: /mcp/actions/chat
+    method: POST
+    description: Execute the chat action
