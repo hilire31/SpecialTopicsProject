@@ -1,5 +1,5 @@
 """
-Chatbot utilisant LangGraph avec recherche RAG et gestion des permissions
+Chatbot using LangGraph with RAG search and permission management
 """
 from typing import TypedDict, Annotated, List
 from langgraph.graph import StateGraph, END
@@ -15,7 +15,7 @@ from src.models.document import CompanyDocument
 
 
 class ChatState(TypedDict):
-    """État du chatbot"""
+    """Chatbot state"""
     messages: Annotated[List, "messages"]
     employee: Employee
     query: str
@@ -24,7 +24,7 @@ class ChatState(TypedDict):
 
 
 class LangGraphChatbot:
-    """Chatbot avec LangGraph intégrant RAG et gestion des permissions"""
+    """Chatbot with LangGraph integrating RAG and permission management"""
     
     def __init__(
         self,
@@ -33,26 +33,26 @@ class LangGraphChatbot:
         temperature: float = 0.7
     ):
         """
-        Initialise le chatbot
+        Initialize the chatbot
         
         Args:
-            es_client: Client Elasticsearch
-            llm_model: Modèle LLM à utiliser
-            temperature: Température pour le LLM
+            es_client: Elasticsearch client
+            llm_model: LLM model to use
+            temperature: Temperature for the LLM
         """
         self.es_client = es_client
         self.llm = ChatOpenAI(model=llm_model, temperature=temperature)
         self.graph = self._build_graph()
     
     def _build_graph(self) -> StateGraph:
-        """Construit le graphe LangGraph"""
+        """Build the LangGraph graph"""
         workflow = StateGraph(ChatState)
         
-        # Ajouter les nœuds
+        # Add nodes
         workflow.add_node("retrieve", self._retrieve_documents)
         workflow.add_node("generate", self._generate_response)
         
-        # Définir les arêtes
+        # Define edges
         workflow.set_entry_point("retrieve")
         workflow.add_edge("retrieve", "generate")
         workflow.add_edge("generate", END)
@@ -61,18 +61,18 @@ class LangGraphChatbot:
     
     def _retrieve_documents(self, state: ChatState) -> ChatState:
         """
-        Récupère les documents pertinents depuis Elasticsearch
+        Retrieve relevant documents from Elasticsearch
         
         Args:
-            state: État actuel du chatbot
+            state: Current chatbot state
             
         Returns:
-            État mis à jour avec les documents récupérés
+            Updated state with retrieved documents
         """
         query = state["query"]
         employee = state["employee"]
         
-        # Rechercher les documents pertinents
+        # Search for relevant documents
         documents = self.es_client.search_documents(
             query=query,
             employee=employee,
@@ -84,23 +84,23 @@ class LangGraphChatbot:
     
     def _generate_response(self, state: ChatState) -> ChatState:
         """
-        Génère la réponse du chatbot en utilisant les documents récupérés
+        Generate chatbot response using retrieved documents
         
         Args:
-            state: État actuel du chatbot
+            state: Current chatbot state
             
         Returns:
-            État mis à jour avec la réponse générée
+            Updated state with generated response
         """
         query = state["query"]
         employee = state["employee"]
         documents = state["retrieved_documents"]
         messages = state.get("messages", [])
         
-        # Construire le contexte à partir des documents
+        # Build context from documents
         context = self._build_context(documents)
         
-        # Créer le prompt système
+        # Create system prompt
         system_prompt = f"""Tu es un assistant IA pour l'entreprise. Tu réponds aux questions des employés en utilisant les documents de l'entreprise.
 
 Informations sur l'employé:
@@ -119,12 +119,12 @@ Instructions:
 - Cite les documents sources quand c'est pertinent
 """
         
-        # Construire les messages
+        # Build messages
         chat_messages = [SystemMessage(content=system_prompt)]
         chat_messages.extend(messages)
         chat_messages.append(HumanMessage(content=query))
         
-        # Générer la réponse
+        # Generate response
         response = self.llm.invoke(chat_messages)
         
         state["response"] = response.content
@@ -137,39 +137,39 @@ Instructions:
     
     def _build_context(self, documents: List[CompanyDocument]) -> str:
         """
-        Construit le contexte à partir des documents récupérés
+        Build context from retrieved documents
         
         Args:
-            documents: Liste des documents
+            documents: List of documents
             
         Returns:
-            Chaîne de caractères contenant le contexte formaté
+            Formatted context string
         """
         if not documents:
-            return "Aucun document pertinent trouvé."
+            return "No relevant documents found."
         
         context_parts = []
         for i, doc in enumerate(documents, 1):
             context_parts.append(
                 f"\n--- Document {i}: {doc.title} ---\n"
-                f"Département: {doc.department or 'Tous'}\n"
-                f"Type: {doc.document_type or 'Non spécifié'}\n"
-                f"Contenu:\n{doc.content[:1000]}..."  # Limiter la longueur
+                f"Department: {doc.department or 'All'}\n"
+                f"Type: {doc.document_type or 'Not specified'}\n"
+                f"Content:\n{doc.content[:1000]}..."  # Limit length
             )
         
         return "\n".join(context_parts)
     
     def chat(self, query: str, employee: Employee, conversation_history: List = None) -> str:
         """
-        Effectue une conversation avec le chatbot
+        Perform a conversation with the chatbot
         
         Args:
-            query: La question de l'employé
-            employee: L'employé qui pose la question
-            conversation_history: Historique de la conversation (optionnel)
+            query: Employee's question
+            employee: Employee asking the question
+            conversation_history: Conversation history (optional)
             
         Returns:
-            La réponse du chatbot
+            Chatbot response
         """
         initial_state = {
             "query": query,
@@ -179,22 +179,27 @@ Instructions:
             "response": ""
         }
         
-        # Exécuter le graphe
+        # Execute the graph
         final_state = self.graph.invoke(initial_state)
         
         return final_state["response"]
     
-    def stream_chat(self, query: str, employee: Employee, conversation_history: List = None):
+    def chat_with_documents(
+        self,
+        query: str,
+        employee: Employee,
+        conversation_history: List = None
+    ) -> tuple[str, List[CompanyDocument]]:
         """
-        Version streaming de la conversation (pour l'interface)
+        Perform a conversation and return both response and retrieved documents
         
         Args:
-            query: La question de l'employé
-            employee: L'employé qui pose la question
-            conversation_history: Historique de la conversation (optionnel)
+            query: Employee's question
+            employee: Employee asking the question
+            conversation_history: Conversation history (optional)
             
-        Yields:
-            Tokens de la réponse au fur et à mesure
+        Returns:
+            Tuple of (response, list of retrieved documents)
         """
         initial_state = {
             "query": query,
@@ -204,10 +209,35 @@ Instructions:
             "response": ""
         }
         
-        # Exécuter le graphe avec streaming
+        # Execute the graph
+        final_state = self.graph.invoke(initial_state)
+        
+        return final_state["response"], final_state["retrieved_documents"]
+    
+    def stream_chat(self, query: str, employee: Employee, conversation_history: List = None):
+        """
+        Streaming version of the conversation (for interface)
+        
+        Args:
+            query: Employee's question
+            employee: Employee asking the question
+            conversation_history: Conversation history (optional)
+            
+        Yields:
+            Response tokens as they are generated
+        """
+        initial_state = {
+            "query": query,
+            "employee": employee,
+            "messages": conversation_history or [],
+            "retrieved_documents": [],
+            "response": ""
+        }
+        
+        # Execute graph with streaming
         for chunk in self.graph.stream(initial_state):
             if "generate" in chunk:
-                # Ici on pourrait streamer la réponse du LLM
-                # Pour simplifier, on retourne la réponse complète
+                # Here we could stream the LLM response
+                # For simplicity, return the complete response
                 yield chunk["generate"]["response"]
 
