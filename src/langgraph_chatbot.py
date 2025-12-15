@@ -1,11 +1,11 @@
 """
 Chatbot using LangGraph with RAG search and permission management
 """
-from typing import TypedDict, Annotated, List
+from typing import TypedDict, Annotated, List, Optional
 from langgraph.graph import StateGraph, END
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
+from langchain_core.messages import HumanMessage, AIMessage, SystemMessage, ToolMessage
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
 
@@ -30,7 +30,8 @@ class LangGraphChatbot:
         self,
         es_client: ElasticsearchClient,
         llm_model: str = "gpt-4o-mini",
-        temperature: float = 0.7
+        temperature: float = 0.7,
+        enable_mcp_tools: bool = True
     ):
         """
         Initialize the chatbot
@@ -39,8 +40,10 @@ class LangGraphChatbot:
             es_client: Elasticsearch client
             llm_model: LLM model to use
             temperature: Temperature for the LLM
+            enable_mcp_tools: Enable MCP tools for actions (create_user, create_document)
         """
         self.es_client = es_client
+        self.enable_mcp_tools = enable_mcp_tools
         self.llm = ChatOpenAI(model=llm_model, temperature=temperature)
         self.graph = self._build_graph()
     
@@ -84,7 +87,7 @@ class LangGraphChatbot:
     
     def _generate_response(self, state: ChatState) -> ChatState:
         """
-        Generate chatbot response using retrieved documents
+        Generate chatbot response using retrieved documents and MCP tools
         
         Args:
             state: Current chatbot state
@@ -100,6 +103,36 @@ class LangGraphChatbot:
         # Build context from documents
         context = self._build_context(documents)
         
+        # Get MCP tools for this employee if enabled
+        tools = []
+        available_actions_text = ""
+        if self.enable_mcp_tools:
+            try:
+                from src.tools.mcp_tools import get_mcp_tools
+                tools = get_mcp_tools(employee)
+                
+                # Build available actions text for the prompt
+                available_actions = []
+                for tool in tools:
+                    if tool.name == "create_user":
+                        available_actions.append("- create_user: Créer un nouvel utilisateur (niveau manager+ requis)")
+                    elif tool.name == "create_document":
+                        available_actions.append("- create_document: Créer un nouveau document")
+                
+                if available_actions:
+                    available_actions_text = f"""
+
+Actions disponibles que tu peux effectuer:
+{chr(10).join(available_actions)}
+
+Si l'utilisateur demande de créer un utilisateur ou un document, utilise l'outil approprié.
+"""
+            except Exception as e:
+                # If tools can't be loaded, continue without them
+                import warnings
+                warnings.warn(f"Could not load MCP tools: {e}. Continuing without MCP tools.")
+                tools = []
+        
         # Create system prompt
         system_prompt = f"""Tu es un assistant IA pour l'entreprise. Tu réponds aux questions des employés en utilisant les documents de l'entreprise.
 
@@ -109,12 +142,13 @@ Informations sur l'employé:
 - Niveau de permission: {employee.permission_level.value}
 
 Documents disponibles:
-{context}
+{context}{available_actions_text}
 
 Instructions:
 - Réponds uniquement en français
-- Utilise uniquement les informations des documents fournis
+- Utilise uniquement les informations des documents fournis pour répondre aux questions
 - Si tu n'as pas d'information dans les documents, dis-le clairement
+- Si l'utilisateur veut effectuer une action (créer un utilisateur, créer un document), utilise l'outil approprié
 - Sois précis et concis
 - Cite les documents sources quand c'est pertinent
 """
@@ -124,14 +158,59 @@ Instructions:
         chat_messages.extend(messages)
         chat_messages.append(HumanMessage(content=query))
         
-        # Generate response
-        response = self.llm.invoke(chat_messages)
+        # Bind tools to LLM if available
+        if tools:
+            llm_with_tools = self.llm.bind_tools(tools)
+        else:
+            llm_with_tools = self.llm
         
-        state["response"] = response.content
-        state["messages"] = messages + [
-            HumanMessage(content=query),
-            AIMessage(content=response.content)
-        ]
+        # Generate response (may include tool calls)
+        response = llm_with_tools.invoke(chat_messages)
+        
+        # Handle tool calls if any
+        if hasattr(response, 'tool_calls') and response.tool_calls:
+            # Add the AI message with tool calls to the conversation
+            chat_messages.append(response)
+            
+            # Execute tool calls
+            for tool_call in response.tool_calls:
+                tool_name = tool_call.get("name")
+                tool_args = tool_call.get("args", {})
+                
+                # Find and execute the tool
+                tool_result = None
+                for tool in tools:
+                    if tool.name == tool_name:
+                        try:
+                            tool_result = tool.invoke(tool_args)
+                        except Exception as e:
+                            tool_result = f"Erreur lors de l'exécution de l'outil {tool_name}: {str(e)}"
+                        break
+                
+                if tool_result:
+                    # Add tool message to conversation
+                    chat_messages.append(
+                        ToolMessage(
+                            content=str(tool_result),
+                            tool_call_id=tool_call.get("id")
+                        )
+                    )
+            
+            # Get final response from LLM after tool execution
+            final_response = llm_with_tools.invoke(chat_messages)
+            state["response"] = final_response.content
+            chat_messages.append(final_response)
+        else:
+            state["response"] = response.content
+            chat_messages.append(response)
+        
+        # Update conversation history (only user and assistant messages)
+        updated_messages = []
+        for msg in chat_messages:
+            if isinstance(msg, (HumanMessage, AIMessage)):
+                updated_messages.append(msg)
+        
+        state["messages"] = updated_messages
         
         return state
     

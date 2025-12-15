@@ -79,6 +79,69 @@ actions:
     outputs:
       - name: response
         type: string
+  
+  - id: create_user
+    description: Create a new user in the system (requires manager level or higher)
+    inputs:
+      - name: name
+        type: string
+        description: Full name of the user
+      - name: email
+        type: string
+        description: Email address of the user
+      - name: department
+        type: string
+        description: Department of the user
+      - name: permission_level
+        type: string
+        description: Permission level (employee, manager, director, executive)
+      - name: employee
+        type: object
+        description: Employee making the request (for permission check)
+    outputs:
+      - name: success
+        type: boolean
+      - name: user
+        type: object
+      - name: message
+        type: string
+  
+  - id: create_document
+    description: Create a new document in the system
+    inputs:
+      - name: title
+        type: string
+        description: Document title
+      - name: content
+        type: string
+        description: Document content
+      - name: department
+        type: string
+        optional: true
+        description: Department associated with the document
+      - name: document_type
+        type: string
+        optional: true
+        description: Type of document (policy, manual, report, etc.)
+      - name: permission_min_level
+        type: string
+        description: Minimum permission level required (employee, manager, director, executive)
+      - name: allowed_departments
+        type: array
+        optional: true
+        description: List of departments with access (null means all departments)
+      - name: employee
+        type: object
+        description: Employee making the request
+    outputs:
+      - name: success
+        type: boolean
+      - name: doc_id
+        type: string
+      - name: document
+        type: object
+      - name: message
+        type: string
 
 endpoints:
   - path: /mcp/spec
@@ -93,3 +156,9 @@ endpoints:
   - path: /mcp/actions/chat
     method: POST
     description: Execute the chat action
+  - path: /mcp/actions/create_user
+    method: POST
+    description: Execute the create_user action
+  - path: /mcp/actions/create_document
+    method: POST
+    description: Execute the create_document action

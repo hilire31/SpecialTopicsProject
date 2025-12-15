@@ -19,7 +19,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.elasticsearch_client import ElasticsearchClient
 from src.langgraph_chatbot import LangGraphChatbot
-from src.models.permissions import Employee
+from src.models.permissions import Employee, PermissionLevel, DocumentPermission
 from src.models.document import CompanyDocument
 
 # Load environment variables
@@ -99,6 +99,26 @@ class DocumentListResponse(BaseModel):
     """Response model for document list"""
     documents: List[dict]
     total: Optional[int] = None
+
+
+class CreateUserRequest(BaseModel):
+    """Request model for creating a user"""
+    name: str
+    email: str
+    department: str
+    permission_level: str
+    employee: dict  # Employee making the request
+
+
+class CreateDocumentRequest(BaseModel):
+    """Request model for creating a document"""
+    title: str
+    content: str
+    department: Optional[str] = None
+    document_type: Optional[str] = None
+    permission_min_level: str
+    allowed_departments: Optional[List[str]] = None
+    employee: dict  # Employee making the request
 
 
 # MCP Endpoints
@@ -302,6 +322,95 @@ def chat_action(req: ChatRequest):
         sources=[d.model_dump() for d in retrieved_docs],
         retrieved_documents=[d.model_dump() for d in retrieved_docs]
     )
+
+
+@app.post("/mcp/actions/create_user")
+def create_user_action(req: CreateUserRequest):
+    """
+    Create a new user in the system (requires manager level or higher)
+    """
+    try:
+        requesting_employee = Employee(**req.employee)
+        
+        # Check permission
+        if requesting_employee.permission_level not in [
+            PermissionLevel.MANAGER,
+            PermissionLevel.DIRECTOR,
+            PermissionLevel.EXECUTIVE
+        ]:
+            raise HTTPException(
+                status_code=403,
+                detail={"error": "Forbidden", "message": "Manager level or higher is required to create users."}
+            )
+        
+        from src.services.user_service import UserService
+        user_service = UserService()
+        
+        new_user = user_service.create_user(
+            name=req.name,
+            email=req.email,
+            department=req.department,
+            permission_level=PermissionLevel(req.permission_level)
+        )
+        
+        return {
+            "success": True,
+            "user": new_user.model_dump(),
+            "message": f"User created successfully with ID: {new_user.user_id}"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "BadRequest", "message": f"Failed to create user: {str(e)}"}
+        )
+
+
+@app.post("/mcp/actions/create_document")
+def create_document_action(req: CreateDocumentRequest):
+    """
+    Create a new document in the system
+    """
+    try:
+        employee = Employee(**req.employee)
+        import uuid
+        
+        doc_id = f"doc_{uuid.uuid4().hex[:8]}"
+        
+        document = CompanyDocument(
+            doc_id=doc_id,
+            title=req.title,
+            content=req.content,
+            department=req.department,
+            document_type=req.document_type,
+            permission=DocumentPermission(
+                min_level=PermissionLevel(req.permission_min_level),
+                allowed_departments=req.allowed_departments
+            )
+        )
+        
+        success = get_es_client().index_document(document)
+        
+        if success:
+            return {
+                "success": True,
+                "doc_id": doc_id,
+                "document": document.model_dump(),
+                "message": f"Document created successfully with ID: {doc_id}"
+            }
+        else:
+            raise HTTPException(
+                status_code=500,
+                detail={"error": "InternalServerError", "message": "Failed to index document"}
+            )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "BadRequest", "message": f"Failed to create document: {str(e)}"}
+        )
 
 
 @app.get("/mcp/health")
