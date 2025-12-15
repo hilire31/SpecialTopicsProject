@@ -6,9 +6,10 @@
 2. [Architecture du projet](#architecture-du-projet)
 3. [Installation et démarrage](#installation-et-démarrage)
 4. [Description des composants](#description-des-composants)
-5. [Modes d'utilisation](#modes-dutilisation)
-6. [Configuration](#configuration)
-7. [Flux de données](#flux-de-données)
+5. [Mapping Elasticsearch](#mapping-elasticsearch)
+6. [Modes d'utilisation](#modes-dutilisation)
+7. [Configuration](#configuration)
+8. [Flux de données](#flux-de-données)
 
 ---
 
@@ -215,6 +216,243 @@ Cela crée 5 documents d'exemple avec différents niveaux de permission.
 - Sentence Transformers pour générer les embeddings
 - Recherche vectorielle avec similarité cosinus
 
+**Pour plus de détails sur le mapping Elasticsearch, voir la section [Mapping Elasticsearch](#mapping-elasticsearch)**
+
+---
+
+### Mapping Elasticsearch
+
+Le mapping définit la structure des documents dans l'index Elasticsearch. Il est créé automatiquement lors de la première initialisation du client.
+
+#### Structure du mapping
+
+```json
+{
+  "properties": {
+    "doc_id": {
+      "type": "keyword"
+    },
+    "title": {
+      "type": "text",
+      "analyzer": "standard"
+    },
+    "content": {
+      "type": "text",
+      "analyzer": "standard"
+    },
+    "department": {
+      "type": "keyword"
+    },
+    "document_type": {
+      "type": "keyword"
+    },
+    "metadata": {
+      "type": "object",
+      "enabled": true
+    },
+    "min_permission_level": {
+      "type": "keyword"
+    },
+    "allowed_departments": {
+      "type": "keyword"
+    },
+    "allowed_users": {
+      "type": "keyword"
+    },
+    "content_embedding": {
+      "type": "dense_vector",
+      "dims": 384,
+      "index": true,
+      "similarity": "cosine"
+    }
+  }
+}
+```
+
+#### Description des champs
+
+**Champs de base** :
+- **`doc_id`** (`keyword`) : Identifiant unique du document. Type `keyword` pour recherche exacte et filtrage.
+- **`title`** (`text`) : Titre du document. Type `text` avec analyseur `standard` pour recherche full-text.
+- **`content`** (`text`) : Contenu du document. Type `text` avec analyseur `standard` pour recherche full-text.
+
+**Champs de classification** :
+- **`department`** (`keyword`) : Département associé au document. Type `keyword` pour filtrage exact.
+- **`document_type`** (`keyword`) : Type de document (policy, manual, report, etc.). Type `keyword` pour filtrage exact.
+- **`metadata`** (`object`) : Métadonnées flexibles. Type `object` avec `enabled: true` pour stocker des données structurées.
+
+**Champs de permissions** :
+- **`min_permission_level`** (`keyword`) : Niveau de permission minimum requis (employee, manager, director, executive).
+- **`allowed_departments`** (`keyword`) : Liste des départements autorisés (peut être un tableau).
+- **`allowed_users`** (`keyword`) : Liste des utilisateurs autorisés (peut être un tableau).
+
+**Champ vectoriel** :
+- **`content_embedding`** (`dense_vector`) : 
+  - **Dimensions** : 384 (taille du vecteur généré par `all-MiniLM-L6-v2`)
+  - **Index** : `true` pour permettre la recherche vectorielle
+  - **Similarité** : `cosine` pour calculer la similarité cosinus entre vecteurs
+
+#### Types de champs expliqués
+
+**`keyword`** :
+- Utilisé pour les valeurs exactes (pas d'analyse)
+- Idéal pour les filtres, tri, agrégations
+- Exemples : `doc_id`, `department`, `document_type`
+
+**`text`** :
+- Utilisé pour la recherche full-text
+- Analyse le texte (tokenisation, normalisation)
+- Exemples : `title`, `content`
+
+**`dense_vector`** :
+- Stocke des vecteurs de nombres flottants
+- Utilisé pour la recherche vectorielle (similarité sémantique)
+- Dimensions fixes (384 dans ce projet)
+- Similarité cosinus pour mesurer la distance entre vecteurs
+
+**`object`** :
+- Stocke des objets JSON imbriqués
+- Permet une structure flexible pour les métadonnées
+
+#### Création automatique du mapping
+
+Le mapping est créé automatiquement lors de l'initialisation du `ElasticsearchClient` :
+
+```python
+# Dans src/elasticsearch_client.py
+def _ensure_index_exists(self):
+    """Create the index if it doesn't exist with the appropriate mapping"""
+    if not self.client.indices.exists(index=self.index_name):
+        mapping = {
+            "properties": {
+                # ... définition du mapping
+            }
+        }
+        self.client.indices.create(index=self.index_name, mappings=mapping)
+```
+
+#### Recherche vectorielle
+
+Le champ `content_embedding` permet la recherche sémantique :
+
+1. **Indexation** : Lors de l'indexation, un embedding est généré à partir du titre et du contenu
+2. **Requête** : La requête de l'utilisateur est convertie en vecteur
+3. **Similarité** : Elasticsearch calcule la similarité cosinus entre le vecteur requête et les vecteurs documents
+4. **Résultats** : Les documents les plus similaires sont retournés
+
+**Exemple de requête vectorielle** :
+```python
+# Génération de l'embedding pour la requête
+query_embedding = embedding_model.encode(query).tolist()
+
+# Recherche dans Elasticsearch
+search_query = {
+    "knn": {
+        "field": "content_embedding",
+        "query_vector": query_embedding,
+        "k": top_k,
+        "num_candidates": 100
+    },
+    "filter": [
+        # Filtres de permission
+    ]
+}
+```
+
+#### Filtrage par permissions
+
+Le mapping supporte le filtrage par permissions via les champs `keyword` :
+
+- **`min_permission_level`** : Comparaison directe avec le niveau de l'employé
+- **`allowed_departments`** : Vérification d'appartenance au tableau
+- **`allowed_users`** : Vérification d'appartenance au tableau
+
+**Exemple de filtre** :
+```python
+permission_filters = [
+    {
+        "range": {
+            "min_permission_level": {
+                # Comparaison basée sur l'ordre hiérarchique
+            }
+        }
+    },
+    {
+        "terms": {
+            "allowed_departments": [employee.department]
+        }
+    }
+]
+```
+
+#### Vérification du mapping
+
+Pour vérifier le mapping de l'index :
+
+```bash
+# Via curl
+curl -X GET "http://localhost:9200/company_documents/_mapping?pretty"
+
+# Via Kibana Dev Tools
+GET /company_documents/_mapping
+```
+
+#### Modification du mapping
+
+**Important** : Le mapping ne peut pas être modifié après la création de l'index. Pour modifier le mapping :
+
+1. Créer un nouvel index avec le nouveau mapping
+2. Réindexer les documents
+3. Supprimer l'ancien index
+4. Renommer le nouvel index
+
+**Exemple de réindexation** :
+```bash
+# Créer un nouvel index
+PUT /company_documents_v2
+{
+  "mappings": {
+    # Nouveau mapping
+  }
+}
+
+# Réindexer
+POST /_reindex
+{
+  "source": {"index": "company_documents"},
+  "dest": {"index": "company_documents_v2"}
+}
+
+# Supprimer l'ancien index
+DELETE /company_documents
+
+# Renommer le nouvel index
+POST /_aliases
+{
+  "actions": [
+    {"add": {"index": "company_documents_v2", "alias": "company_documents"}}
+  ]
+}
+```
+
+#### Bonnes pratiques
+
+1. **Champs `keyword` vs `text`** :
+   - Utilisez `keyword` pour les valeurs exactes (IDs, catégories, filtres)
+   - Utilisez `text` pour la recherche full-text
+
+2. **Vecteurs d'embedding** :
+   - Dimensions fixes : ne changez pas les dimensions après création
+   - Modèle cohérent : utilisez le même modèle pour indexation et recherche
+
+3. **Permissions** :
+   - Stockez les permissions comme `keyword` pour filtrage efficace
+   - Utilisez des tableaux pour les listes (départements, utilisateurs)
+
+4. **Métadonnées** :
+   - Utilisez `object` pour des structures flexibles
+   - Évitez les objets trop profonds (performance)
+
 ---
 
 ### 3. **src/langgraph_chatbot.py** - Chatbot LangGraph
@@ -241,6 +479,10 @@ Question → retrieve → generate → Réponse
 - Construire les prompts système avec contexte
 - Gérer l'historique de conversation
 - Appeler le LLM OpenAI pour générer les réponses
+- Intégrer les outils MCP pour permettre des actions (création d'utilisateurs, documents)
+
+**Intégration MCP** :
+Le chatbot peut utiliser le serveur MCP pour effectuer des actions directement depuis la conversation. Voir [docs/MCP_INTEGRATION.md](../docs/MCP_INTEGRATION.md) pour plus de détails.
 
 ---
 
