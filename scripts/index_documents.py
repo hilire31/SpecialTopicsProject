@@ -17,22 +17,22 @@ load_dotenv()
 
 
 def create_example_documents() -> list[CompanyDocument]:
-    """Crée des documents d'exemple avec différents niveaux de permission"""
-    
+    """Create example documents with different permission levels"""
+
     documents = [
         CompanyDocument(
             doc_id="doc_001",
-            title="Politique de congés payés",
+            title="Paid Leave Policy",
             content="""
-            Politique de congés payés de l'entreprise:
-            
-            Tous les employés ont droit à 25 jours de congés payés par an.
-            Les congés doivent être demandés au moins 2 semaines à l'avance.
-            Les congés sont accordés selon les besoins de l'entreprise et la disponibilité de l'équipe.
-            
-            Pour les managers et au-dessus, des congés supplémentaires peuvent être accordés selon les circonstances.
+            Company paid leave policy:
+
+            All employees are entitled to 25 days of paid leave per year.
+            Leave must be requested at least 2 weeks in advance.
+            Leave is granted based on business needs and team availability.
+
+            For managers and above, additional leave may be granted depending on circumstances.
             """,
-            department="RH",
+            department="HR",
             document_type="policy",
             permission=DocumentPermission(
                 min_level=PermissionLevel.EMPLOYEE
@@ -40,15 +40,15 @@ def create_example_documents() -> list[CompanyDocument]:
         ),
         CompanyDocument(
             doc_id="doc_002",
-            title="Manuel de sécurité informatique",
+            title="IT Security Manual",
             content="""
-            Manuel de sécurité informatique:
-            
-            Tous les employés doivent utiliser des mots de passe forts (minimum 12 caractères).
-            Les mots de passe doivent être changés tous les 90 jours.
-            Il est interdit de partager ses identifiants avec d'autres personnes.
-            
-            En cas de suspicion de compromission, contacter immédiatement le service IT.
+            IT security manual:
+
+            All employees must use strong passwords (minimum 12 characters).
+            Passwords must be changed every 90 days.
+            Sharing login credentials with others is strictly prohibited.
+
+            In case of suspected compromise, immediately contact the IT department.
             """,
             department="IT",
             document_type="manual",
@@ -58,37 +58,37 @@ def create_example_documents() -> list[CompanyDocument]:
         ),
         CompanyDocument(
             doc_id="doc_003",
-            title="Stratégie financière 2024",
+            title="Financial Strategy 2024",
             content="""
-            Stratégie financière de l'entreprise pour l'année 2024:
-            
-            Objectifs principaux:
-            - Augmenter le chiffre d'affaires de 15%
-            - Réduire les coûts opérationnels de 5%
-            - Investir dans de nouvelles technologies
-            
-            Budget alloué: 2 millions d'euros pour les investissements.
+            Company financial strategy for the year 2024:
+
+            Main objectives:
+            - Increase revenue by 15%
+            - Reduce operational costs by 5%
+            - Invest in new technologies
+
+            Allocated budget: 2 million euros for investments.
             """,
             department="Finance",
             document_type="report",
             permission=DocumentPermission(
                 min_level=PermissionLevel.DIRECTOR,
-                allowed_departments=["Finance", "Direction"]
+                allowed_departments=["Finance", "Management"]
             )
         ),
         CompanyDocument(
             doc_id="doc_004",
-            title="Plan de restructuration",
+            title="Restructuring Plan",
             content="""
-            Plan de restructuration de l'entreprise:
-            
-            Cette restructuration affectera plusieurs départements.
-            Les détails complets sont confidentiels et ne peuvent être partagés qu'avec la direction.
-            
+            Company restructuring plan:
+
+            This restructuring will affect several departments.
+            Full details are confidential and may only be shared with executive management.
+
             Timeline: Q2 2024
-            Impact estimé: 50 postes concernés
+            Estimated impact: 50 positions affected
             """,
-            department="Direction",
+            department="Management",
             document_type="confidential",
             permission=DocumentPermission(
                 min_level=PermissionLevel.EXECUTIVE
@@ -96,27 +96,27 @@ def create_example_documents() -> list[CompanyDocument]:
         ),
         CompanyDocument(
             doc_id="doc_005",
-            title="Procédure de recrutement RH",
+            title="HR Recruitment Procedure",
             content="""
-            Procédure de recrutement pour le département RH:
-            
-            1. Création du poste et validation par le manager
-            2. Publication de l'offre d'emploi
-            3. Sélection des candidats
-            4. Entretiens avec les candidats retenus
-            5. Validation finale par le directeur RH
-            
-            Durée moyenne du processus: 4-6 semaines.
+            Recruitment procedure for the HR department:
+
+            1. Job creation and approval by the manager
+            2. Job posting publication
+            3. Candidate screening
+            4. Interviews with shortlisted candidates
+            5. Final approval by the HR director
+
+            Average process duration: 4–6 weeks.
             """,
-            department="RH",
+            department="HR",
             document_type="procedure",
             permission=DocumentPermission(
                 min_level=PermissionLevel.MANAGER,
-                allowed_departments=["RH"]
+                allowed_departments=["HR"]
             )
         ),
     ]
-    
+
     return documents
 
 
