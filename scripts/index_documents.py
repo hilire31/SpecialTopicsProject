@@ -122,7 +122,7 @@ def create_example_documents() -> list[CompanyDocument]:
 
 def main():
     """Fonction principale"""
-    print("📚 Indexation des documents d'exemple...")
+    print("📚 Indexation of example documents...")
     
     # Initialiser le client Elasticsearch
     es_client = ElasticsearchClient(
@@ -134,11 +134,11 @@ def main():
     documents = create_example_documents()
     
     # Indexer les documents
-    print(f"\nIndexation de {len(documents)} documents...")
+    print(f"\nIndexation of {len(documents)} documents...")
     success_count = es_client.index_documents_bulk(documents)
     
-    print(f"✅ {success_count} documents indexés avec succès!")
-    print("\nDocuments indexés:")
+    print(f"✅ {success_count} documents indexed with success!")
+    print("\n indexed documents :")
     for doc in documents:
         print(f"  - {doc.title} (Permission: {doc.permission.min_level.value})")
 
