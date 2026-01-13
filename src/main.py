@@ -24,7 +24,7 @@ def create_example_employee() -> Employee:
         name="Jean Dupont",
         email="jean.dupont@entreprise.com",
         department="RH",
-        permission_level=PermissionLevel.MANAGER
+        permission_level=PermissionLevel.EXECUTIVE
     )
 
 
@@ -63,7 +63,7 @@ def main():
         if not query.strip():
             continue
         
-        print("\n🤔 Recherche dans les documents...")
+        print("\n🤔 Research in the documents...")
         response = chatbot.chat(
             query=query,
             employee=employee,

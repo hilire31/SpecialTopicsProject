@@ -145,7 +145,7 @@ Documents disponibles:
 {context}{available_actions_text}
 
 Instructions:
-- Réponds uniquement en français
+- Réponds uniquement en anglais
 - Utilise uniquement les informations des documents fournis pour répondre aux questions
 - Si tu n'as pas d'information dans les documents, dis-le clairement
 - Si l'utilisateur veut effectuer une action (créer un utilisateur, créer un document), utilise l'outil approprié

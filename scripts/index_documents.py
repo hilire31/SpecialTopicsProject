@@ -44,7 +44,6 @@ def create_example_documents() -> list[CompanyDocument]:
             content="""
             IT security manual:
 
-            All employees must use strong passwords (minimum 12 characters).
             Passwords must be changed every 90 days.
             Sharing login credentials with others is strictly prohibited.
 
